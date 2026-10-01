@@ -1,0 +1,2630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>2D Computer Assembly Simulator (Kyubiks Group)</title>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    font-family:Arial,sans-serif;
+    background:#e5e7eb;
+    overflow:hidden;
+}
+
+/* =====================================================
+   HEADER
+===================================================== */
+
+header{
+    height:70px;
+    background:#111827;
+    color:white;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 20px;
+}
+
+header h1{
+    margin:0;
+    font-size:21px;
+}
+
+.controls{
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+
+button{
+    border:0;
+    padding:9px 13px;
+    border-radius:7px;
+    background:#2563eb;
+    color:white;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#1d4ed8;
+}
+
+.status{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    padding:8px 12px;
+    background:#1f2937;
+    border-radius:8px;
+    font-size:13px;
+}
+
+.status-light{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    background:#ef4444;
+}
+
+.status-light.on{
+    background:#22c55e;
+    box-shadow:0 0 10px #22c55e;
+}
+
+/* =====================================================
+   WORKSPACE
+===================================================== */
+
+.workspace{
+    position:relative;
+    height:calc(100vh - 70px);
+    overflow:hidden;
+    background-color:#f8fafc;
+
+    background-image:
+        linear-gradient(#dbe3ec 1px,transparent 1px),
+        linear-gradient(90deg,#dbe3ec 1px,transparent 1px);
+
+    background-size:25px 25px;
+    touch-action:none;
+}
+
+/* =====================================================
+   WIRES
+===================================================== */
+
+#wires{
+    position:absolute;
+    left:0;
+    top:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    z-index:3;
+}
+
+.wire{
+    fill:none;
+    stroke-width:6;
+    stroke-linecap:round;
+    filter:
+        drop-shadow(0 2px 2px rgba(0,0,0,.25));
+}
+
+.wire.power-wire{
+    stroke:#ef4444;
+}
+
+.wire.video-wire{
+    stroke:#2563eb;
+}
+
+.wire.usb-wire{
+    stroke:#f59e0b;
+}
+
+/* =====================================================
+   PARTS
+===================================================== */
+
+.part{
+    position:absolute;
+    cursor:grab;
+    user-select:none;
+    z-index:10;
+    touch-action:none;
+}
+
+.part.dragging{
+    cursor:grabbing;
+    z-index:100;
+}
+
+/* =====================================================
+   LABEL
+===================================================== */
+
+.label{
+    text-align:center;
+    margin-top:6px;
+    font-size:14px;
+    font-weight:bold;
+    color:#334155;
+    pointer-events:none;
+}
+
+/* =====================================================
+   PORT
+===================================================== */
+
+.port{
+    position:absolute;
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    border:3px solid white;
+
+    box-shadow:
+        0 2px 5px rgba(0,0,0,.45);
+
+    cursor:pointer;
+    z-index:200;
+    transition:.15s;
+
+    touch-action:none;
+}
+
+.port:hover{
+    transform:scale(1.25);
+}
+
+.port.selected{
+    outline:3px solid #111827;
+    transform:scale(1.25);
+}
+
+.power-port{
+    background:#ef4444;
+}
+
+.video-port{
+    background:#2563eb;
+}
+
+.usb-port{
+    background:#f59e0b;
+}
+
+.wall-port{
+    background:#22c55e;
+}
+
+/* =====================================================
+   PORT DISCONNECT HOLD EFFECT
+===================================================== */
+
+.port.disconnecting{
+    animation:disconnectPulse .7s linear;
+}
+
+@keyframes disconnectPulse{
+    0%{
+        box-shadow:
+            0 0 0 0 rgba(239,68,68,.8);
+    }
+
+    50%{
+        box-shadow:
+            0 0 0 10px rgba(239,68,68,.15);
+    }
+
+    100%{
+        box-shadow:
+            0 0 0 0 rgba(239,68,68,0);
+    }
+}
+
+/* =====================================================
+   BACK PORTS HIDDEN
+===================================================== */
+
+.monitor-power-port,
+.monitor-video-port,
+.cpu-power-port,
+.cpu-video-port,
+.cpu-keyboard-port,
+.cpu-mouse-port{
+    opacity:0;
+    pointer-events:none;
+}
+
+.monitor.show-back-ports .monitor-power-port,
+.monitor.show-back-ports .monitor-video-port,
+
+.cpu.show-back-ports .cpu-power-port,
+.cpu.show-back-ports .cpu-video-port,
+.cpu.show-back-ports .cpu-keyboard-port,
+.cpu.show-back-ports .cpu-mouse-port{
+    opacity:1;
+    pointer-events:auto;
+}
+
+/* =====================================================
+   ROTATE BUTTON
+===================================================== */
+
+.rotate-button{
+    position:absolute;
+    right:-15px;
+    top:-15px;
+    width:35px;
+    height:35px;
+    border-radius:50%;
+    padding:0;
+    background:#7c3aed;
+    z-index:500;
+}
+
+/* =====================================================
+   MONITOR
+===================================================== */
+
+.monitor{
+    left:80px;
+    top:100px;
+    width:290px;
+    height:265px;
+    perspective:1000px;
+}
+
+.monitor-inner{
+    width:100%;
+    height:180px;
+    position:relative;
+    transform-style:preserve-3d;
+    transition:transform .8s;
+}
+
+.monitor-inner.rotate{
+    transform:rotateY(180deg);
+}
+
+.monitor-face{
+    position:absolute;
+    width:100%;
+    height:180px;
+    backface-visibility:hidden;
+    border-radius:12px;
+}
+
+.monitor-front{
+    background:#1f2937;
+    border:8px solid #111827;
+    padding:12px;
+
+    box-shadow:
+        0 5px 12px rgba(0,0,0,.3);
+}
+
+.monitor-screen{
+    width:100%;
+    height:100%;
+    background:#000;
+    border-radius:4px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    color:#fff;
+    font-family:"Courier New",monospace;
+    font-size:14px;
+    transition:.3s;
+    text-align:center;
+    overflow:hidden;
+    position:relative;
+    padding:0;
+}
+
+.monitor-power-led{
+    position:absolute;
+
+    width:8px;
+    height:8px;
+
+    border-radius:50%;
+
+    background:#374151;
+
+    right:7px;
+    bottom:7px;
+
+    border:1px solid #111827;
+
+    transition:.3s;
+
+    z-index:50;
+}
+
+.monitor-power-led.on{
+    background:#ef4444;
+
+    box-shadow:
+        0 0 5px #ef4444,
+        0 0 10px rgba(239,68,68,.65);
+}
+
+.monitor-screen.booting{
+    background:#000;
+    color:#fff;
+
+    box-shadow:
+        inset 0 0 25px rgba(255,255,255,.08);
+}
+
+.monitor-screen.error-screen{
+    background:#000;
+    color:#fff;
+
+    box-shadow:
+        inset 0 0 20px rgba(255,255,255,.08);
+}
+
+.monitor.powered .monitor-front{
+    box-shadow:0 0 14px rgba(34,197,94,.2), 0 5px 12px rgba(0,0,0,.3);
+}
+.monitor-screen.ready-screen{
+    background:#000;
+    color:#fff;
+
+    box-shadow:
+        inset 0 0 20px rgba(255,255,255,.08);
+}
+
+.monitor-message{
+    display:none;
+    line-height:1.2;
+    width:100%;
+    height:100%;
+    padding:0;
+    text-align:left;
+    font-size:clamp(8px, 2.1vw, 12px);
+    overflow-wrap:anywhere;
+    overflow:hidden;
+}
+
+.monitor-message.booting{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:flex-start;
+    padding: 8px 10px;
+}
+
+.monitor-message.error{
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:flex-start;
+    padding: 8px 10px;
+}
+
+.monitor-message.ready{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    height:100%;
+    width:100%;
+    padding:0;
+    margin:0;
+}
+.monitor-message.booting > div,
+.monitor-message.error > div{ margin:2px 0; }
+
+.no-signal{
+    display:block;
+    color:#64748b;
+}
+
+.monitor-screen:not(.monitor-powered) .no-signal{
+    display:none;
+}
+
+.monitor-screen.video-connected .no-signal{
+    display:none;
+}
+
+.monitor-screen.video-connected .monitor-message{
+    display:block;
+}
+
+.monitor-back{
+    background:#374151;
+    border:8px solid #1f2937;
+    transform:rotateY(180deg);
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+}
+
+.monitor-back-body{
+    width:70%;
+    height:75%;
+    background:#4b5563;
+    border-radius:8px;
+    padding:18px;
+}
+
+.monitor-back-port{
+    height:12px;
+    background:#111827;
+    margin:8px 0;
+    border-radius:3px;
+}
+
+.monitor-stand{
+    position:absolute;
+    width:55px;
+    height:32px;
+    background:#374151;
+    top:180px;
+    left:118px;
+}
+
+.monitor-base{
+    position:absolute;
+    width:135px;
+    height:12px;
+    background:#374151;
+    border-radius:20px;
+    top:212px;
+    left:78px;
+}
+
+.monitor > .label{
+    position:absolute;
+    top:224px;
+    left:0;
+    width:100%;
+    margin-top:6px;
+}
+
+.monitor-power-port{
+    right:-11px;
+    top:35px;
+}
+
+.monitor-video-port{
+    right:-11px;
+    top:75px;
+}
+
+/* =====================================================
+   CPU
+===================================================== */
+
+.cpu{
+    left:430px;
+    top:110px;
+    width:180px;
+    height:315px;
+    perspective:1000px;
+}
+
+.cpu-inner{
+    width:100%;
+    height:260px;
+    position:relative;
+    transform-style:preserve-3d;
+    transition:transform .8s;
+}
+
+.cpu-inner.rotate{
+    transform:rotateY(180deg);
+}
+
+.cpu-face{
+    position:absolute;
+    width:100%;
+    height:260px;
+    backface-visibility:hidden;
+    border-radius:10px;
+}
+
+.cpu-front{
+    background:
+        linear-gradient(
+            90deg,
+            #111827,
+            #374151
+        );
+
+    border:5px solid #0f172a;
+    padding:25px;
+}
+
+.drive{
+    height:12px;
+    background:#0f172a;
+    margin-bottom:22px;
+    border-radius:3px;
+}
+
+.power-button{
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    background:#111827;
+    border:3px solid #94a3b8;
+
+    margin:40px auto 25px;
+
+    transition:.3s;
+    cursor:pointer;
+    position:relative;
+}
+
+.cpu-blue-led{
+    position:absolute;
+
+    width:6px;
+    height:6px;
+
+    border-radius:50%;
+
+    background:#374151;
+
+    left:50%;
+    top:-13px;
+
+    transform:translateX(-50%);
+
+    border:1px solid #111827;
+
+    transition:.3s;
+}
+
+.cpu-blue-led.on{
+    background:#2563eb;
+
+    box-shadow:
+        0 0 5px #2563eb,
+        0 0 11px rgba(37,99,235,.8);
+}
+
+.cpu.on .power-button{
+    background:#22c55e;
+
+    box-shadow:
+        0 0 15px #22c55e;
+}
+
+.cpu-usb{
+    width:28px;
+    height:8px;
+    background:#111827;
+    margin:9px auto;
+}
+
+.cpu-back{
+    background:#374151;
+    border:5px solid #1f2937;
+    transform:rotateY(180deg);
+    padding:15px;
+}
+
+.fan{
+    width:75px;
+    height:75px;
+    border-radius:50%;
+
+    border:8px solid #111827;
+
+    margin:3px auto 14px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    color:#9ca3af;
+    font-size:11px;
+}
+
+.cpu-port-shape{
+    height:13px;
+    background:#111827;
+    margin:8px 0;
+    border-radius:3px;
+}
+
+.cpu-port-large{
+    width:90%;
+}
+
+.cpu-port-small{
+    width:60%;
+}
+
+.cpu-power-port{
+    left:-11px;
+    top:40px;
+}
+
+.cpu-video-port{
+    left:-11px;
+    top:80px;
+}
+
+.cpu-keyboard-port{
+    left:-11px;
+    top:115px;
+}
+
+.cpu-mouse-port{
+    left:-11px;
+    top:150px;
+}
+
+/* =====================================================
+   REALISTIC KEYBOARD STYLING & RGB BORDER
+===================================================== */
+
+.keyboard{
+    left:130px;
+    top:410px;
+    width:380px;
+    height:155px;
+}
+
+.keyboard-body{
+    width:100%;
+    height:130px;
+    background:#1a1a1a;
+    border:3px solid #333;
+    border-radius:8px;
+    padding:6px;
+    position:relative;
+    box-shadow:0 4px 10px rgba(0,0,0,0.3);
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+}
+
+.keyboard.powered .keyboard-body {
+    border-color: #00ffcc;
+    box-shadow: 0 0 12px rgba(0, 255, 204, 0.6), inset 0 0 8px rgba(0, 255, 204, 0.2);
+}
+
+.keys{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    height:100%;
+}
+
+.key-row{
+    display:flex;
+    gap:3px;
+    justify-content:space-between;
+}
+
+.key{
+    background:#2d2d2d;
+    color:#e0e0e0;
+    font-size:8px;
+    font-weight:bold;
+    font-family:monospace;
+    border-radius:3px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:1;
+    height:19px;
+    user-select:none;
+    cursor:pointer;
+    box-shadow:0 2px 0 #111;
+    transition:background 0.1s, transform 0.1s, box-shadow 0.1s;
+}
+
+.key:active, .key.pressed{
+    background:#444;
+    transform:translateY(2px);
+    box-shadow:0 0 0 #111;
+}
+
+.key.space{
+    flex:6;
+}
+
+.keyboard-port{
+    right:-11px;
+    top:50px;
+}
+
+/* =====================================================
+   MOUSE
+===================================================== */
+
+.mouse{
+    left:550px;
+    top:420px;
+    width:75px;
+    height:100px;
+}
+
+.mouse-body{
+    width:60px;
+    height:85px;
+
+    background:#2a2a2a;
+
+    border:3px solid #444;
+    border-radius:35px;
+
+    position:relative;
+}
+
+.mouse-wheel{
+    width:10px;
+    height:20px;
+
+    background:#64748b;
+    border-radius:5px;
+
+    margin:15px auto;
+}
+
+.mouse-optical-light{
+    position:absolute;
+
+    width:13px;
+    height:5px;
+
+    background:#374151;
+
+    border-radius:50%;
+
+    left:50%;
+    bottom:-3px;
+
+    transform:translateX(-50%);
+
+    transition:.2s;
+
+    z-index:20;
+}
+
+.mouse.powered .mouse-body{
+    border-color:#22c55e;
+    box-shadow:0 0 8px rgba(34,197,94,.35);
+}
+.mouse.connected .mouse-optical-light{
+    background:#ef0000;
+
+    box-shadow:
+        0 0 6px #ef0000,
+        0 0 13px rgba(239,0,0,.85);
+}
+
+.mouse-port{
+    left:-11px;
+    top:30px;
+}
+
+/* =====================================================
+   MULTI PLUG
+===================================================== */
+
+.multiplug{
+    left:760px;
+    top:100px;
+    width:210px;
+    height:180px;
+}
+
+.multiplug-body{
+    width:195px;
+    height:135px;
+
+    background:#f8fafc;
+
+    border:4px solid #64748b;
+    border-radius:12px;
+
+    padding:10px;
+
+    box-shadow:
+        0 4px 10px rgba(0,0,0,.2);
+
+    position:relative;
+}
+
+.multiplug-title{
+    text-align:center;
+    font-size:12px;
+    font-weight:bold;
+    color:#334155;
+    margin-bottom:8px;
+}
+
+.multiplug-sockets{
+    display:flex;
+    justify-content:space-between;
+    gap:5px;
+}
+
+.plug-socket{
+    width:35px;
+    height:45px;
+
+    border:3px solid #64748b;
+    border-radius:6px;
+
+    background:#e2e8f0;
+
+    position:relative;
+}
+
+.plug-socket span{
+    position:absolute;
+
+    width:4px;
+    height:14px;
+
+    background:#334155;
+
+    border-radius:2px;
+    top:10px;
+}
+
+.plug-socket span:first-child{
+    left:8px;
+}
+
+.plug-socket span:last-child{
+    right:8px;
+}
+
+.multiplug-power-led{
+    position:absolute;
+
+    width:9px;
+    height:9px;
+
+    border-radius:50%;
+
+    background:#374151;
+
+    left:10px;
+    bottom:7px;
+
+    border:1px solid #111827;
+
+    transition:.3s;
+}
+
+.multiplug-power-led.on{
+    background:#ef4444;
+
+    box-shadow:
+        0 0 5px #ef4444,
+        0 0 12px rgba(239,68,68,.8);
+}
+
+.multiplug-switch{
+    position:absolute;
+
+    right:10px;
+    bottom:6px;
+
+    font-size:9px;
+    font-weight:bold;
+
+    color:#16a34a;
+}
+
+.multiplug-port-1{
+    left:-11px;
+    top:12px;
+}
+
+.multiplug-port-2{
+    left:-11px;
+    top:40px;
+}
+
+.multiplug-port-3{
+    left:-11px;
+    top:68px;
+}
+
+.multiplug-port-4{
+    left:-11px;
+    top:96px;
+}
+
+.multiplug-main-port{
+    right:-11px;
+    top:118px;
+}
+
+/* =====================================================
+   MAIN WALL POWER
+===================================================== */
+
+.wallplug{
+    left:1040px;
+    top:100px;
+    width:180px;
+    height:180px;
+}
+
+.wallplug-body{
+    width:150px;
+    height:120px;
+
+    background:white;
+
+    border:5px solid #475569;
+    border-radius:12px;
+
+    padding:15px;
+
+    box-shadow:
+        0 4px 12px rgba(0,0,0,.2);
+
+    position:relative;
+}
+
+.wallplug-title{
+    text-align:center;
+    font-size:12px;
+    font-weight:bold;
+    color:#334155;
+    margin-bottom:12px;
+}
+
+.wall-socket{
+    width:70px;
+    height:55px;
+
+    border:4px solid #64748b;
+    border-radius:10px;
+
+    background:#e2e8f0;
+
+    margin:auto;
+
+    position:relative;
+}
+
+.wall-socket span{
+    position:absolute;
+
+    width:7px;
+    height:20px;
+
+    background:#334155;
+
+    border-radius:3px;
+
+    top:12px;
+}
+
+.wall-socket span:first-child{
+    left:17px;
+}
+
+.wall-socket span:last-child{
+    right:17px;
+}
+
+.wallplug-port{
+    left:-11px;
+    top:55px;
+}
+
+/* =====================================================
+   INSTRUCTIONS
+===================================================== */
+
+.instructions{
+    position:absolute;
+
+    left:15px;
+    bottom:15px;
+
+    background:white;
+
+    border:1px solid #cbd5e1;
+    border-radius:9px;
+
+    padding:10px 14px;
+
+    font-size:13px;
+    color:#475569;
+
+    z-index:500;
+
+    box-shadow:
+        0 3px 10px rgba(0,0,0,.08);
+}
+
+.instructions strong{
+    color:#111827;
+}
+
+/* =====================================================
+   WINDOWS LOCK SCREEN STYLING & CURSOR
+===================================================== */
+
+.win-lock-screen {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #1e3a8a, #0f172a);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-family: Arial, sans-serif;
+    padding: 6px;
+    position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.win-lock-clock {
+    position: absolute;
+    top: 8px;
+    font-size: 13px;
+    font-weight: 300;
+    letter-spacing: 0.5px;
+}
+
+.win-user-profile {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 50%;
+    background: #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    color: #1e293b;
+    margin-top: 10px;
+    margin-bottom: 4px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    border: 1.5px solid rgba(255,255,255,0.4);
+    aspect-ratio: 1 / 1;
+}
+
+.win-username {
+    font-size: 10px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.win-password-container {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 2px 5px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(5px);
+}
+
+.win-password-input {
+    background: transparent;
+    border: none;
+    color: white;
+    outline: none;
+    font-size: 9px;
+    width: 80px;
+}
+
+.win-password-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.win-submit-btn {
+    background: rgba(255, 255, 255, 0.3);
+    border: none;
+    color: white;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    font-size: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.win-submit-btn:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.win-error-msg {
+    color: #fca5a5;
+    font-size: 9px;
+    margin-top: 4px;
+    font-weight: bold;
+}
+
+.win-desktop {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 11px;
+    font-weight: bold;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+}
+
+.screen-cursor {
+    position: absolute;
+    width: 10px;
+    height: 15px;
+    background: white;
+    clip-path: polygon(0 0, 0 100%, 30% 75%, 50% 100%, 65% 95%, 45% 70%, 100% 70%);
+    border: 1px solid black;
+    pointer-events: none;
+    z-index: 9999;
+    display: none;
+    transform: translate(0, 0);
+}
+
+</style>
+</head>
+
+<body>
+
+<header>
+
+<h1>🖥️ Kyubiks Computer Assembly Simulator</h1>
+
+<div class="controls">
+
+<div class="status">
+
+<span
+id="statusLight"
+class="status-light">
+</span>
+
+<span id="statusText">
+Computer OFF
+</span>
+
+</div>
+
+<button onclick="rotateMonitor()">
+↻ Monitor
+</button>
+
+<button onclick="rotateCPU()">
+↻ CPU
+</button>
+
+<button onclick="resetComputer()">
+Reset
+</button>
+
+</div>
+
+</header>
+
+
+<div
+class="workspace"
+id="workspace">
+
+<svg id="wires"></svg>
+
+
+<!-- =====================================================
+     MONITOR
+===================================================== -->
+
+<div
+class="part monitor"
+id="monitor">
+
+<button
+class="rotate-button"
+onclick="rotateMonitor()">
+↻
+</button>
+
+<div
+class="monitor-inner"
+id="monitorInner">
+
+<div class="monitor-face monitor-front">
+
+<div
+class="monitor-screen"
+id="monitorScreen">
+
+<span class="no-signal">
+NO SIGNAL
+</span>
+
+<div
+class="monitor-message"
+id="monitorMessage">
+</div>
+
+<div
+class="monitor-power-led"
+id="monitorPowerLed">
+</div>
+
+</div>
+
+</div>
+
+
+<div class="monitor-face monitor-back">
+
+<div class="monitor-back-body">
+
+<div class="monitor-back-port"></div>
+<div class="monitor-back-port"></div>
+<div class="monitor-back-port"></div>
+<div class="monitor-back-port"></div>
+
+</div>
+
+</div>
+
+</div>
+
+
+<div class="monitor-stand"></div>
+<div class="monitor-base"></div>
+
+
+<button
+class="port power-port monitor-power-port"
+data-port="monitor-power"
+data-type="power"
+title="Monitor Power">
+</button>
+
+
+<button
+class="port video-port monitor-video-port"
+data-port="monitor-video"
+data-type="video"
+title="Monitor Video">
+</button>
+
+
+<div class="label">
+Monitor
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     CPU
+===================================================== -->
+
+<div
+class="part cpu"
+id="cpu">
+
+<button
+class="rotate-button"
+onclick="rotateCPU()">
+↻
+</button>
+
+
+<div
+class="cpu-inner"
+id="cpuInner">
+
+<div class="cpu-face cpu-front">
+
+<div class="drive"></div>
+<div class="drive"></div>
+
+
+<div
+class="power-button"
+id="powerButton"
+title="Press to start computer">
+
+<div
+class="cpu-blue-led"
+id="cpuBlueLed">
+</div>
+
+</div>
+
+
+<div class="cpu-usb"></div>
+<div class="cpu-usb"></div>
+
+</div>
+
+
+<div class="cpu-face cpu-back">
+
+<div class="fan">
+FAN
+</div>
+
+<div class="cpu-port-shape cpu-port-large"></div>
+<div class="cpu-port-shape"></div>
+<div class="cpu-port-shape"></div>
+<div class="cpu-port-shape cpu-port-small"></div>
+<div class="cpu-port-shape cpu-port-small"></div>
+
+</div>
+
+</div>
+
+
+<button
+class="port power-port cpu-power-port"
+data-port="cpu-power"
+data-type="power"
+title="CPU Power">
+</button>
+
+
+<button
+class="port video-port cpu-video-port"
+data-port="cpu-video"
+data-type="video"
+title="CPU Video">
+</button>
+
+
+<button
+class="port usb-port cpu-keyboard-port"
+data-port="cpu-keyboard"
+data-type="usb"
+title="Keyboard USB">
+</button>
+
+
+<button
+class="port usb-port cpu-mouse-port"
+data-port="cpu-mouse"
+data-type="usb"
+title="Mouse USB">
+</button>
+
+
+<div class="label">
+CPU / System Unit
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     KEYBOARD
+===================================================== -->
+
+<div
+class="part keyboard"
+id="keyboard">
+
+<div class="keyboard-body">
+    <div class="keys" id="keys"></div>
+</div>
+
+<button
+class="port usb-port keyboard-port"
+data-port="keyboard-usb"
+data-type="usb"
+title="Keyboard USB">
+</button>
+
+<div class="label">
+Keyboard
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     MOUSE
+===================================================== -->
+
+<div
+class="part mouse"
+id="mouse">
+
+<div class="mouse-body">
+
+<div class="mouse-wheel">
+</div>
+
+<div
+class="mouse-optical-light"
+id="mouseOpticalLight">
+</div>
+
+</div>
+
+<button
+class="port usb-port mouse-port"
+data-port="mouse-usb"
+data-type="usb"
+title="Mouse USB">
+</button>
+
+<div class="label">
+Mouse
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     MULTI PLUG
+===================================================== -->
+
+<div
+class="part multiplug"
+id="multiplug">
+
+<div class="multiplug-body">
+
+<div class="multiplug-title">
+🔌 MULTI PLUG
+</div>
+
+
+<div class="multiplug-sockets">
+
+<div class="plug-socket">
+<span></span>
+<span></span>
+</div>
+
+<div class="plug-socket">
+<span></span>
+<span></span>
+</div>
+
+<div class="plug-socket">
+<span></span>
+<span></span>
+</div>
+
+<div class="plug-socket">
+<span></span>
+<span></span>
+</div>
+
+</div>
+
+<div
+class="multiplug-power-led"
+id="multiplugPowerLed">
+</div>
+
+
+<div class="multiplug-switch">
+● ON
+</div>
+
+</div>
+
+
+<button
+class="port wall-port multiplug-port-1"
+data-port="multiplug-power-1"
+data-type="power"
+title="Multi Plug Socket 1">
+</button>
+
+
+<button
+class="port wall-port multiplug-port-2"
+data-port="multiplug-power-2"
+data-type="power"
+title="Multi Plug Socket 2">
+</button>
+
+
+<button
+class="port wall-port multiplug-port-3"
+data-port="multiplug-power-3"
+data-type="power"
+title="Multi Plug Socket 3">
+</button>
+
+
+<button
+class="port wall-port multiplug-port-4"
+data-port="multiplug-power-4"
+data-type="power"
+title="Multi Plug Socket 4">
+</button>
+
+
+<button
+class="port wall-port multiplug-main-port"
+data-port="multiplug-main"
+data-type="power"
+title="Multi Plug Main Power Input">
+</button>
+
+
+<div class="label">
+Multi Plug
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     MAIN WALL POWER
+===================================================== -->
+
+<div
+class="part wallplug"
+id="wallplug">
+
+<div class="wallplug-body">
+
+<div class="wallplug-title">
+⚡ MAIN POWER
+</div>
+
+<div class="wall-socket">
+
+<span></span>
+<span></span>
+
+</div>
+
+</div>
+
+
+<button
+class="port wall-port wallplug-port"
+data-port="main-wall-power"
+data-type="power"
+title="Main Wall Power">
+</button>
+
+
+<div class="label">
+Main Power
+</div>
+
+</div>
+
+
+<!-- =====================================================
+     INSTRUCTIONS
+===================================================== -->
+
+<div class="instructions">
+
+<strong>
+How to connect:
+</strong>
+
+<br>
+
+1. Connect Main Power → Multi Plug.<br>
+2. Rotate CPU to see back ports.<br>
+3. Rotate Monitor to see back ports.<br>
+4. Connect CPU + Monitor → Multi Plug.<br>
+5. Connect CPU → Monitor video cable.<br>
+6. Connect Keyboard → CPU.<br>
+7. Connect Mouse → CPU.<br>
+8. Press the CPU power button to start.<br>
+9. Type password **1234** using Keyboard and press Enter.<br>
+10. <strong>Hold a connected port for 0.7 sec to disconnect.</strong>
+
+<br><br>
+
+🔴 Power &nbsp;
+🔵 Video &nbsp;
+🟡 USB &nbsp;
+🟢 Main Power
+
+</div>
+
+</div>
+
+
+<script>
+
+/* =====================================================
+   GLOBAL STATE & VARIABLES
+===================================================== */
+
+const workspace = document.getElementById("workspace");
+const wires = document.getElementById("wires");
+const monitorScreen = document.getElementById("monitorScreen");
+const monitorMessage = document.getElementById("monitorMessage");
+const statusText = document.getElementById("statusText");
+const statusLight = document.getElementById("statusLight");
+const cpu = document.getElementById("cpu");
+const keyboard = document.getElementById("keyboard");
+const mouse = document.getElementById("mouse");
+const monitorPowerLed = document.getElementById("monitorPowerLed");
+const cpuBlueLed = document.getElementById("cpuBlueLed");
+const powerButton = document.getElementById("powerButton");
+const multiplugPowerLed = document.getElementById("multiplugPowerLed");
+
+let selectedPort = null;
+const connections = new Map();
+
+let computerStarted = false;
+let booting = false;
+let systemUnlocked = false;
+
+// Password handling state
+let enteredPassword = "";
+let passwordErrorState = false;
+const CORRECT_PASSWORD = "1234";
+
+// Mouse cursor relative position state
+let mouseCursorX = 100;
+let mouseCursorY = 80;
+let lastDragClientX = 0;
+let lastDragClientY = 0;
+
+
+/* =====================================================
+   CREATE KEYBOARD KEYS WITH REALISTIC LAYOUT & TEXT
+===================================================== */
+
+const keysContainer = document.getElementById("keys");
+
+const keyRows = [
+    ["Esc", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "Bksp"],
+    ["Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "Enter"],
+    ["Caps", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'"],
+    ["Shift", "Z", "X", "C", "V", "B", "N", "M", ",", ".", "/", "Shift"],
+    ["Ctrl", "Win", "Alt", "Space", "Alt", "Fn", "Ctrl"]
+];
+
+keyRows.forEach(rowKeys => {
+    const rowEl = document.createElement("div");
+    rowEl.className = "key-row";
+    
+    rowKeys.forEach(text => {
+        const key = document.createElement("div");
+        key.className = "key";
+        if (text === "Space") {
+            key.classList.add("space");
+        }
+        key.textContent = text;
+        
+        key.addEventListener("pointerdown", () => {
+            key.classList.add("pressed");
+            handleVirtualKeyPress(text);
+        });
+        key.addEventListener("pointerup", () => {
+            key.classList.remove("pressed");
+        });
+        key.addEventListener("pointerleave", () => {
+            key.classList.remove("pressed");
+        });
+
+        rowEl.appendChild(key);
+    });
+    
+    keysContainer.appendChild(rowEl);
+});
+
+
+/* =====================================================
+   VIRTUAL KEY PRESS HANDLER (KEYBOARD TYPING)
+===================================================== */
+
+function handleVirtualKeyPress(keyText) {
+    const multiPlugPowered = isMultiPlugPowered();
+    const cpuPowerConnected = isPowerFromMultiPlug("cpu-power");
+    const systemPowerAvailable = multiPlugPowered && cpuPowerConnected && computerStarted;
+    
+    if (!systemPowerAvailable || !isKeyboardConnected() || systemUnlocked || booting) {
+        return;
+    }
+
+    // Handle typing digits or characters
+    if (keyText.length === 1 && /^[0-9a-zA-Z]$/.test(keyText)) {
+        if (enteredPassword.length < 10) {
+            enteredPassword += keyText;
+            passwordErrorState = false;
+            updatePasswordUI();
+        }
+    } else if (keyText === "Bksp") {
+        if (enteredPassword.length > 0) {
+            enteredPassword = enteredPassword.slice(0, -1);
+            passwordErrorState = false;
+            updatePasswordUI();
+        }
+    } else if (keyText === "Enter") {
+        submitWinPassword();
+    }
+}
+
+function updatePasswordUI() {
+    const pwdInput = document.getElementById("winPassword");
+    const errorContainer = document.getElementById("winPasswordError");
+    if (pwdInput) {
+        pwdInput.value = enteredPassword;
+    }
+    if (errorContainer) {
+        if (passwordErrorState) {
+            errorContainer.textContent = "Wrong Password";
+        } else {
+            errorContainer.textContent = "";
+        }
+    }
+}
+
+
+/* =====================================================
+   ROTATE MONITOR
+===================================================== */
+
+function rotateMonitor(){
+    const monitor = document.getElementById("monitor");
+    const inner = document.getElementById("monitorInner");
+    inner.classList.toggle("rotate");
+    monitor.classList.toggle("show-back-ports");
+    drawWires();
+}
+
+
+/* =====================================================
+   ROTATE CPU
+===================================================== */
+
+function rotateCPU(){
+    const cpuElement = document.getElementById("cpu");
+    const inner = document.getElementById("cpuInner");
+    inner.classList.toggle("rotate");
+    cpuElement.classList.toggle("show-back-ports");
+    drawWires();
+}
+
+
+/* =====================================================
+   PORT SYSTEM
+===================================================== */
+
+const ports = document.querySelectorAll(".port");
+
+ports.forEach(port => {
+    port.addEventListener("click", function(event){
+        event.stopPropagation();
+        selectPort(this);
+    });
+});
+
+
+/* =====================================================
+   HOLD TO DISCONNECT
+===================================================== */
+
+let holdTimer = null;
+let holdPort = null;
+const HOLD_TIME = 700;
+
+ports.forEach(port => {
+    port.addEventListener("pointerdown", function(event){
+        event.stopPropagation();
+        holdPort = this;
+        clearTimeout(holdTimer);
+
+        if(isPortConnected(this.dataset.port)){
+            this.classList.add("disconnecting");
+            holdTimer = setTimeout(() => {
+                disconnectPort(this.dataset.port);
+                this.classList.remove("disconnecting");
+                if(selectedPort === this){
+                    this.classList.remove("selected");
+                    selectedPort = null;
+                }
+                holdPort = null;
+            }, HOLD_TIME);
+        }
+    });
+
+    port.addEventListener("pointerup", cancelHold);
+    port.addEventListener("pointerleave", cancelHold);
+    port.addEventListener("pointercancel", cancelHold);
+});
+
+function cancelHold(){
+    if(holdTimer){
+        clearTimeout(holdTimer);
+        holdTimer = null;
+    }
+    if(holdPort){
+        holdPort.classList.remove("disconnecting");
+    }
+    holdPort = null;
+}
+
+
+/* =====================================================
+   CHECK PORT CONNECTION
+===================================================== */
+
+function isPortConnected(portId){
+    if(connections.has(portId)){
+        return true;
+    }
+    for(const [key, value] of connections.entries()){
+        if(value === portId){
+            return true;
+        }
+    }
+    return false;
+}
+
+
+/* =====================================================
+   DISCONNECT PORT
+===================================================== */
+
+function disconnectPort(portId){
+    let removed = false;
+    connections.forEach((value,key)=>{
+        if(key === portId || value === portId){
+            connections.delete(key);
+            removed = true;
+        }
+    });
+
+    if(removed){
+        drawWires();
+        updateAfterConnection();
+        updateDeviceLights();
+    }
+}
+
+
+/* =====================================================
+   SELECT PORT
+===================================================== */
+
+function selectPort(port){
+    const style = window.getComputedStyle(port);
+    if(style.pointerEvents === "none" || style.opacity === "0"){
+        return;
+    }
+
+    if(selectedPort === null){
+        selectedPort = port;
+        port.classList.add("selected");
+        return;
+    }
+
+    if(selectedPort === port){
+        port.classList.remove("selected");
+        selectedPort = null;
+        return;
+    }
+
+    const firstType = selectedPort.dataset.type;
+    const secondType = port.dataset.type;
+
+    if(firstType !== secondType){
+        showError("These ports are not compatible.");
+        selectedPort.classList.remove("selected");
+        selectedPort = null;
+        return;
+    }
+
+    makeConnection(selectedPort.dataset.port, port.dataset.port);
+
+    selectedPort.classList.remove("selected");
+    selectedPort = null;
+
+    drawWires();
+    updateAfterConnection();
+}
+
+
+/* =====================================================
+   CONNECTION
+===================================================== */
+
+function makeConnection(portA, portB){
+    connections.forEach((value,key)=>{
+        if(key === portA || key === portB || value === portA || value === portB){
+            connections.delete(key);
+        }
+    });
+    connections.set(portA, portB);
+}
+
+
+/* =====================================================
+   IS CONNECTED
+===================================================== */
+
+function isConnected(portA, portB){
+    return (connections.get(portA) === portB || connections.get(portB) === portA);
+}
+
+
+/* =====================================================
+   MULTI PLUG POWER
+===================================================== */
+
+function isMultiPlugPowered(){
+    return isConnected("main-wall-power", "multiplug-main");
+}
+
+
+/* =====================================================
+   DEVICE POWER
+===================================================== */
+
+function isPowerFromMultiPlug(devicePort){
+    if(!isMultiPlugPowered()){
+        return false;
+    }
+    return (
+        isConnected(devicePort, "multiplug-power-1") ||
+        isConnected(devicePort, "multiplug-power-2") ||
+        isConnected(devicePort, "multiplug-power-3") ||
+        isConnected(devicePort, "multiplug-power-4")
+    );
+}
+
+
+/* =====================================================
+   USB CONNECTION STATUS
+===================================================== */
+
+function isKeyboardConnected(){
+    return isConnected("cpu-keyboard", "keyboard-usb");
+}
+
+function isMouseConnected(){
+    return isConnected("cpu-mouse", "mouse-usb");
+}
+
+
+/* =====================================================
+   UPDATE DEVICE LIGHTS
+===================================================== */
+
+function updateDeviceLights(){
+    const multiPlugPowered = isMultiPlugPowered();
+    const cpuPowerConnected = isPowerFromMultiPlug("cpu-power");
+    const monitorPowered = isPowerFromMultiPlug("monitor-power");
+    const systemPowerAvailable = multiPlugPowered && cpuPowerConnected && computerStarted;
+
+    multiplugPowerLed.classList.toggle("on", multiPlugPowered);
+    monitorPowerLed.classList.toggle("on", monitorPowered);
+    cpuBlueLed.classList.toggle("on", cpuPowerConnected);
+
+    keyboard.classList.toggle("powered", systemPowerAvailable && isKeyboardConnected());
+    mouse.classList.toggle("connected", systemPowerAvailable && isMouseConnected());
+
+    document.getElementById("monitor").classList.toggle("powered", monitorPowered && computerStarted);
+    mouse.classList.toggle("powered", systemPowerAvailable && isMouseConnected());
+
+    const screenCursor = document.getElementById("screenCursor");
+    if(screenCursor) {
+        if(systemPowerAvailable && isMouseConnected() && computerStarted && monitorPowered && isConnected("cpu-video", "monitor-video") && !booting) {
+            screenCursor.style.display = "block";
+        } else {
+            screenCursor.style.display = "none";
+        }
+    }
+}
+
+
+/* =====================================================
+   PORT CENTER
+===================================================== */
+
+function getPortCenter(portId){
+    const port = document.querySelector(`[data-port="${portId}"]`);
+    const portRect = port.getBoundingClientRect();
+    const boardRect = workspace.getBoundingClientRect();
+
+    return {
+        x: portRect.left + portRect.width / 2 - boardRect.left,
+        y: portRect.top + portRect.height / 2 - boardRect.top
+    };
+}
+
+
+/* =====================================================
+   DRAW WIRES
+===================================================== */
+
+function drawWires(){
+    wires.innerHTML = "";
+
+    connections.forEach((portB, portA)=>{
+        if([...connections.entries()].some(([a,b]) => a === portB && b === portA)){
+            return;
+        }
+
+        const start = getPortCenter(portA);
+        const end = getPortCenter(portB);
+        const distance = Math.abs(end.x - start.x);
+        const curve = Math.max(60, distance * .45);
+
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("d", `M ${start.x} ${start.y} C ${start.x + curve} ${start.y}, ${end.x - curve} ${end.y}, ${end.x} ${end.y}`);
+
+        const port = document.querySelector(`[data-port="${portA}"]`);
+        const type = port.dataset.type;
+
+        path.classList.add("wire");
+        if(type === "power"){
+            path.classList.add("power-wire");
+        } else if(type === "video"){
+            path.classList.add("video-wire");
+        } else {
+            path.classList.add("usb-wire");
+        }
+
+        wires.appendChild(path);
+    });
+}
+
+
+/* =====================================================
+   CONNECTION CHECK
+===================================================== */
+
+function getSystemErrors(){
+    const errors = [];
+    if(!isMultiPlugPowered()) errors.push("MAIN POWER NOT CONNECTED");
+    if(!isPowerFromMultiPlug("cpu-power")) errors.push("CPU POWER NOT CONNECTED");
+    if(!isPowerFromMultiPlug("monitor-power")) errors.push("MONITOR POWER NOT CONNECTED");
+    if(!isConnected("cpu-video", "monitor-video")) errors.push("VIDEO CABLE NOT CONNECTED");
+    if(!isKeyboardConnected()) errors.push("KEYBOARD NOT CONNECTED");
+    if(!isMouseConnected()) errors.push("MOUSE NOT CONNECTED");
+    return errors;
+}
+
+
+/* =====================================================
+   BOOT SCREEN
+===================================================== */
+
+function showBootScreen(){
+    monitorScreen.classList.remove("ready-screen", "error-screen");
+    monitorScreen.classList.add("booting");
+    monitorMessage.className = "monitor-message booting";
+    monitorMessage.innerHTML = `
+        <div><strong>KYUBIKS BIOS</strong></div>
+        <div>Initializing system...</div>
+        <div>Checking hardware...</div>
+        <div>Please wait...</div>
+    `;
+}
+
+
+/* =====================================================
+   SHOW SYSTEM ERROR
+===================================================== */
+
+function showSystemError(errors){
+    monitorScreen.classList.remove("booting", "ready-screen");
+    monitorScreen.classList.add("error-screen");
+    monitorMessage.className = "monitor-message error";
+    monitorMessage.innerHTML = `
+        <div><strong>KYUBIKS BIOS</strong></div>
+        <div><strong>SYSTEM ERROR</strong></div>
+        <div>${errors.map(error => "ERROR: " + error).join("<br>")}</div>
+        <div><strong>SYSTEM HALTED</strong></div>
+    `;
+}
+
+
+/* =====================================================
+   SHOW READY / WINDOWS LOCK SCREEN
+===================================================== */
+
+function showReadyScreen(){
+    monitorScreen.classList.remove("booting", "error-screen");
+    monitorScreen.classList.add("ready-screen");
+    monitorMessage.className = "monitor-message ready";
+
+    const screenRect = monitorScreen.getBoundingClientRect();
+    if(screenRect.width > 0) {
+        mouseCursorX = screenRect.width / 2;
+        mouseCursorY = screenRect.height / 2;
+    }
+
+    if(!systemUnlocked) {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        monitorMessage.innerHTML = `
+            <div class="win-lock-screen" id="winLockScreenContainer">
+                <div class="win-lock-clock">${timeString}</div>
+                <div class="win-user-profile">👤</div>
+                <div class="win-username">Kyubiks Tech</div>
+                <div class="win-password-container">
+                    <input type="password" class="win-password-input" id="winPassword" value="${enteredPassword}" placeholder="Password" readonly />
+                    <button class="win-submit-btn" onclick="submitWinPassword()">➔</button>
+                </div>
+                <div class="win-error-msg" id="winPasswordError">${passwordErrorState ? "Wrong Password" : ""}</div>
+                <div class="screen-cursor" id="screenCursor" style="left:${mouseCursorX}px; top:${mouseCursorY}px; display:block;"></div>
+            </div>
+        `;
+    } else {
+        monitorMessage.innerHTML = `
+            <div class="win-desktop">
+                <div>🪟 Welcome to Windows</div>
+                <div style="font-size:9px; font-weight:normal; opacity:0.8;">System Ready & Unlocked</div>
+                <div class="screen-cursor" id="screenCursor" style="left:${mouseCursorX}px; top:${mouseCursorY}px; display:block;"></div>
+            </div>
+        `;
+    }
+}
+
+function submitWinPassword(){
+    if (systemUnlocked) return;
+    
+    if (enteredPassword === CORRECT_PASSWORD) {
+        systemUnlocked = true;
+        passwordErrorState = false;
+        showReadyScreen();
+        statusText.textContent = "Computer ON — Unlocked";
+    } else {
+        passwordErrorState = true;
+        enteredPassword = "";
+        updatePasswordUI();
+    }
+}
+
+
+/* =====================================================
+   UPDATE DISPLAY
+===================================================== */
+
+function updateDisplay(){
+    const monitorPowered = isPowerFromMultiPlug("monitor-power");
+    monitorScreen.classList.toggle("monitor-powered", monitorPowered);
+
+    if(!monitorPowered){
+        monitorScreen.classList.remove("on", "booting", "error-screen", "ready-screen", "video-connected");
+        monitorMessage.className = "monitor-message";
+        monitorMessage.innerHTML = "";
+        return;
+    }
+
+    const videoOK = isConnected("cpu-video", "monitor-video");
+    if(!videoOK){
+        monitorScreen.classList.remove("on", "booting", "error-screen", "ready-screen", "video-connected");
+        monitorMessage.innerHTML = "";
+        return;
+    }
+
+    monitorScreen.classList.add("video-connected");
+
+    if(!computerStarted){
+        monitorScreen.classList.remove("on", "booting", "error-screen", "ready-screen");
+        monitorMessage.className = "monitor-message booting";
+        monitorMessage.innerHTML = `
+            <strong>COMPUTER OFF</strong>
+            <br>
+            Press CPU Power Button
+        `;
+        return;
+    }
+
+    const errors = getSystemErrors();
+    if(errors.length > 0){
+        monitorScreen.classList.add("on");
+        showSystemError(errors);
+        statusLight.classList.remove("on");
+        statusText.textContent = "Computer ERROR";
+        return;
+    }
+
+    monitorScreen.classList.add("on");
+    showReadyScreen();
+    cpu.classList.add("on");
+    statusLight.classList.add("on");
+    statusText.textContent = systemUnlocked ? "Computer ON — Unlocked" : "Computer ON — Lock Screen";
+}
+
+
+/* =====================================================
+   CPU POWER BUTTON
+===================================================== */
+
+powerButton.addEventListener("click", function(event){
+    event.stopPropagation();
+    if(booting) return;
+    if(computerStarted){
+        computerStarted = false;
+        stopComputer();
+        return;
+    }
+    startComputer();
+});
+
+
+/* =====================================================
+   START COMPUTER
+===================================================== */
+
+function startComputer(){
+    const videoOK = isConnected("cpu-video", "monitor-video");
+    if(!videoOK){
+        computerStarted = false;
+        cpu.classList.remove("on");
+        statusLight.classList.remove("on");
+        statusText.textContent = "NO VIDEO SIGNAL";
+        monitorScreen.classList.remove("on", "booting", "error-screen", "ready-screen", "video-connected");
+        monitorMessage.innerHTML = "";
+        return;
+    }
+
+    const cpuPowerOK = isPowerFromMultiPlug("cpu-power");
+    if(!cpuPowerOK){
+        computerStarted = false;
+        cpu.classList.remove("on");
+        statusLight.classList.remove("on");
+        statusText.textContent = "CPU POWER ERROR";
+        monitorScreen.classList.add("video-connected", "on", "error-screen");
+        monitorMessage.className = "monitor-message error";
+        monitorMessage.innerHTML = `
+            <div>KYUBIKS BIOS</div><br>
+            <div>SYSTEM ERROR</div><br>
+            ERROR: CPU POWER NOT CONNECTED<br><br>
+            SYSTEM HALTED
+        `;
+        return;
+    }
+
+    computerStarted = true;
+    booting = true;
+    systemUnlocked = false;
+    enteredPassword = "";
+    passwordErrorState = false;
+
+    cpu.classList.add("on");
+    statusText.textContent = "Computer Booting...";
+    statusLight.classList.remove("on");
+    showBootScreen();
+
+    setTimeout(function(){
+        booting = false;
+        const errors = getSystemErrors();
+        if(errors.length > 0){
+            showSystemError(errors);
+            statusLight.classList.remove("on");
+            statusText.textContent = "Computer ERROR";
+            return;
+        }
+
+        showReadyScreen();
+        statusLight.classList.add("on");
+        statusText.textContent = "Computer ON — Lock Screen";
+        cpu.classList.add("on");
+    }, 2000);
+}
+
+
+/* =====================================================
+   STOP COMPUTER
+===================================================== */
+
+function stopComputer(){
+    booting = false;
+    systemUnlocked = false;
+    enteredPassword = "";
+    passwordErrorState = false;
+    updateDeviceLights();
+
+    cpu.classList.remove("on");
+    monitorScreen.classList.remove("on", "booting", "error-screen", "ready-screen");
+    statusLight.classList.remove("on");
+    statusText.textContent = "Computer OFF";
+
+    const videoOK = isConnected("cpu-video", "monitor-video");
+    if(videoOK){
+        monitorScreen.classList.add("video-connected");
+        monitorMessage.className = "monitor-message booting";
+        monitorMessage.innerHTML = `
+            <strong>COMPUTER OFF</strong>
+            <br>
+            Press CPU Power Button
+        `;
+    } else {
+        monitorScreen.classList.remove("video-connected");
+        monitorMessage.innerHTML = "";
+    }
+}
+
+
+/* =====================================================
+   UPDATE AFTER CONNECTION
+===================================================== */
+
+function updateAfterConnection(){
+    updateDeviceLights();
+    const monitorPowered = isPowerFromMultiPlug("monitor-power");
+    monitorScreen.classList.toggle("monitor-powered", monitorPowered);
+
+    if(!monitorPowered){
+        monitorScreen.classList.remove("on", "booting", "error-screen", "ready-screen", "video-connected");
+        monitorMessage.className = "monitor-message";
+        monitorMessage.innerHTML = "";
+    }
+
+    if(computerStarted && !booting){
+        updateDisplay();
+        return;
+    }
+
+    if(!computerStarted){
+        const videoOK = isConnected("cpu-video", "monitor-video");
+        if(videoOK){
+            monitorScreen.classList.add("video-connected");
+            monitorScreen.classList.remove("on", "booting", "error-screen", "ready-screen");
+            monitorMessage.className = "monitor-message booting";
+            monitorMessage.innerHTML = `
+                <strong>COMPUTER OFF</strong>
+                <br>
+                Press CPU Power Button
+            `;
+        } else {
+            monitorScreen.classList.remove("on", "video-connected", "booting", "error-screen", "ready-screen");
+            monitorMessage.innerHTML = "";
+        }
+    }
+}
+
+
+/* =====================================================
+   RECHECK SYSTEM
+===================================================== */
+
+function checkComputer(){
+    updateDeviceLights();
+    updateAfterConnection();
+}
+
+
+/* =====================================================
+   ERROR POPUP
+===================================================== */
+
+function showError(message){
+    alert(message);
+}
+
+
+/* =====================================================
+   DRAGGING & PHYSICAL MOUSE CURSOR CONTROL
+===================================================== */
+
+const parts = document.querySelectorAll(".part");
+let draggingPart = null;
+let offsetX = 0;
+let offsetY = 0;
+
+parts.forEach(part=>{
+    part.addEventListener("pointerdown", startDrag);
+});
+
+function startDrag(event){
+    if(
+        event.target.classList.contains("port") ||
+        event.target.classList.contains("rotate-button") ||
+        event.target.classList.contains("power-button")
+    ){
+        return;
+    }
+
+    draggingPart = event.currentTarget;
+    const rect = draggingPart.getBoundingClientRect();
+
+    offsetX = event.clientX - rect.left;
+    offsetY = event.clientY - rect.top;
+
+    if(draggingPart.id === 'mouse') {
+        lastDragClientX = event.clientX;
+        lastDragClientY = event.clientY;
+    }
+
+    draggingPart.classList.add("dragging");
+    draggingPart.setPointerCapture(event.pointerId);
+
+    draggingPart.addEventListener("pointermove", dragPart);
+    draggingPart.addEventListener("pointerup", stopDrag);
+}
+
+function dragPart(event){
+    if(!draggingPart) return;
+
+    const boardRect = workspace.getBoundingClientRect();
+    let x = event.clientX - boardRect.left - offsetX;
+    let y = event.clientY - boardRect.top - offsetY;
+
+    x = Math.max(0, Math.min(x, workspace.clientWidth - draggingPart.offsetWidth));
+    y = Math.max(0, Math.min(y, workspace.clientHeight - draggingPart.offsetHeight));
+
+    draggingPart.style.left = x + "px";
+    draggingPart.style.top = y + "px";
+
+    if(draggingPart.id === 'mouse') {
+        const dx = event.clientX - lastDragClientX;
+        const dy = event.clientY - lastDragClientY;
+        lastDragClientX = event.clientX;
+        lastDragClientY = event.clientY;
+
+        const screenRect = monitorScreen.getBoundingClientRect();
+        const screenCursor = document.getElementById("screenCursor");
+        if(screenCursor) {
+            const multiPlugPowered = isMultiPlugPowered();
+            const cpuPowerConnected = isPowerFromMultiPlug("cpu-power");
+            const systemPowerAvailable = multiPlugPowered && cpuPowerConnected && computerStarted;
+            const mouseActive = systemPowerAvailable && isMouseConnected() && isConnected("cpu-video", "monitor-video") && !booting;
+
+            if(mouseActive) {
+                screenCursor.style.display = "block";
+                mouseCursorX = Math.max(0, Math.min(mouseCursorX + dx, screenRect.width - 12));
+                mouseCursorY = Math.max(0, Math.min(mouseCursorY + dy, screenRect.height - 18));
+                screenCursor.style.left = mouseCursorX + "px";
+                screenCursor.style.top = mouseCursorY + "px";
+            } else {
+                screenCursor.style.display = "none";
+            }
+        }
+    }
+
+    drawWires();
+}
+
+function stopDrag(event){
+    if(!draggingPart) return;
+
+    draggingPart.classList.remove("dragging");
+    draggingPart.releasePointerCapture?.(event.pointerId);
+    draggingPart.removeEventListener("pointermove", dragPart);
+    draggingPart.removeEventListener("pointerup", stopDrag);
+    draggingPart = null;
+
+    drawWires();
+}
+
+
+/* =====================================================
+   DOUBLE CLICK ROTATION
+===================================================== */
+
+document.getElementById("monitor").addEventListener("dblclick", event=>{
+    if(event.target.classList.contains("port") || event.target.classList.contains("rotate-button")) return;
+    rotateMonitor();
+});
+
+document.getElementById("cpu").addEventListener("dblclick", event=>{
+    if(
+        event.target.classList.contains("port") ||
+        event.target.classList.contains("rotate-button") ||
+        event.target.classList.contains("power-button")
+    ) return;
+    rotateCPU();
+});
+
+
+/* =====================================================
+   RESET
+===================================================== */
+
+function resetComputer(){
+    computerStarted = false;
+    booting = false;
+    systemUnlocked = false;
+    enteredPassword = "";
+    passwordErrorState = false;
+
+    connections.clear();
+    selectedPort = null;
+
+    document.querySelectorAll(".port").forEach(port=>{
+        port.classList.remove("selected", "disconnecting");
+    });
+
+    const monitor = document.getElementById("monitor");
+    const cpuElement = document.getElementById("cpu");
+
+    document.getElementById("monitorInner").classList.remove("rotate");
+    document.getElementById("cpuInner").classList.remove("rotate");
+
+    monitor.classList.remove("show-back-ports");
+    cpuElement.classList.remove("show-back-ports");
+
+    monitor.style.left = "80px";
+    monitor.style.top = "100px";
+    cpuElement.style.left = "430px";
+    cpuElement.style.top = "110px";
+
+    document.getElementById("keyboard").style.left = "130px";
+    document.getElementById("keyboard").style.top = "410px";
+
+    document.getElementById("mouse").style.left = "550px";
+    document.getElementById("mouse").style.top = "420px";
+
+    document.getElementById("multiplug").style.left = "760px";
+    document.getElementById("multiplug").style.top = "100px";
+
+    document.getElementById("wallplug").style.left = "1040px";
+    document.getElementById("wallplug").style.top = "100px";
+
+    monitorScreen.classList.remove("on", "video-connected", "monitor-powered", "booting", "error-screen", "ready-screen");
+    monitorMessage.className = "monitor-message";
+    monitorMessage.innerHTML = "";
+
+    cpu.classList.remove("on");
+    monitorPowerLed.classList.remove("on");
+    cpuBlueLed.classList.remove("on");
+    multiplugPowerLed.classList.remove("on");
+    keyboard.classList.remove("powered");
+    mouse.classList.remove("connected", "powered");
+    document.getElementById("monitor").classList.remove("powered");
+
+    statusLight.classList.remove("on");
+    statusText.textContent = "Computer OFF";
+
+    drawWires();
+}
+
+
+/* =====================================================
+   RESIZE
+===================================================== */
+
+window.addEventListener("resize", drawWires);
+
+
+/* =====================================================
+   INITIAL
+===================================================== */
+
+drawWires();
+checkComputer();
+
+</script>
+
+</body>
+</html>
